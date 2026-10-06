@@ -52,4 +52,51 @@ if (closeUpRoot is not null && Directory.Exists(closeUpRoot))
 
 Console.WriteLine($"Routing errors: {errors.Count}");
 foreach (var error in errors) Console.Error.WriteLine(error);
+
+if (args.Contains("--site-smoke", StringComparer.OrdinalIgnoreCase))
+{
+    var siteRoot = Path.Combine(
+        Path.GetFullPath("artifacts"),
+        "site-smoke",
+        DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+    var downloader = new SiteCatalogDownloader();
+    var results = await downloader.DownloadAsync(
+        ["47528", "999999999"],
+        siteRoot,
+        progress: null,
+        CancellationToken.None);
+
+    var found = results.Single(result => result.Article == "47528");
+    var missing = results.Single(result => result.Article == "999999999");
+    if (!found.HasFolder || found.DownloadedImageCount == 0)
+        errors.Add("SITE 47528: images were not downloaded.");
+    if (missing.HasFolder || string.IsNullOrWhiteSpace(missing.FailureReason))
+        errors.Add("SITE missing article: skip reason was not returned.");
+
+    var report = new ReportService().Save(
+        [
+            new ProcessingReportEntry
+            {
+                Source = "Сайт OutmaxShop",
+                Article = missing.Article,
+                FolderPath = "Папка не создана",
+                DownloadStatus = "❌ Не скачано",
+                Status = "Пропущено",
+                Reason = missing.FailureReason ?? string.Empty
+            }
+        ],
+        Path.Combine(siteRoot, "Отчёты WB Dropp"));
+    var reportText = File.ReadAllText(report.TextPath);
+    if (!reportText.Contains("📦 WB DROPP", StringComparison.Ordinal) ||
+        !reportText.Contains("Артикул не найден", StringComparison.OrdinalIgnoreCase))
+        errors.Add("REPORT: manager-friendly text or skip reason is missing.");
+
+    Console.WriteLine($"Site smoke: downloaded {found.DownloadedImageCount}/{found.CatalogImageCount}; report: {report.TextPath}");
+}
+
+if (errors.Count > 0)
+{
+    Console.Error.WriteLine("Final errors:");
+    foreach (var error in errors) Console.Error.WriteLine(error);
+}
 return errors.Count == 0 ? 0 : 1;
