@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WBDropp", "src\WBDropp\WBDropp.csproj", "{D7641B47-45A6-4B76-AFE8-D9BB6953CE55}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WBDropp.SmokeTests", "tests\WBDropp.SmokeTests\WBDropp.SmokeTests.csproj", "{A5DF693F-2F0A-4FE4-A68A-37BA7202D341}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D7641B47-45A6-4B76-AFE8-D9BB6953CE55}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D7641B47-45A6-4B76-AFE8-D9BB6953CE55}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D7641B47-45A6-4B76-AFE8-D9BB6953CE55}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D7641B47-45A6-4B76-AFE8-D9BB6953CE55}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A5DF693F-2F0A-4FE4-A68A-37BA7202D341}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A5DF693F-2F0A-4FE4-A68A-37BA7202D341}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A5DF693F-2F0A-4FE4-A68A-37BA7202D341}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A5DF693F-2F0A-4FE4-A68A-37BA7202D341}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
