@@ -1,4 +1,7 @@
 using System.IO;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using WBDropp.Models;
 using WBDropp.Services;
 
@@ -14,6 +17,14 @@ var classifier = new ImageClassifier();
 var errors = new List<string>();
 var total = 0;
 var closeUps = 0;
+
+var buttonErrors = new List<string>();
+var buttonTestThread = new Thread(() => CheckPrimaryButtonContrast(buttonErrors));
+buttonTestThread.SetApartmentState(ApartmentState.STA);
+buttonTestThread.Start();
+buttonTestThread.Join();
+errors.AddRange(buttonErrors);
+Console.WriteLine("Primary button contrast checked in enabled and disabled states.");
 
 foreach (var path in Directory.EnumerateFiles(sampleRoot, "*.jpg", SearchOption.AllDirectories))
 {
@@ -100,3 +111,49 @@ if (errors.Count > 0)
     foreach (var error in errors) Console.Error.WriteLine(error);
 }
 return errors.Count == 0 ? 0 : 1;
+
+static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+{
+    for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+    {
+        var child = VisualTreeHelper.GetChild(parent, index);
+        if (child is T match) return match;
+        var nested = FindVisualChild<T>(child);
+        if (nested is not null) return nested;
+    }
+    return null;
+}
+
+static void CheckPrimaryButtonContrast(List<string> errors)
+{
+    try
+    {
+        var application = new WBDropp.App();
+        application.InitializeComponent();
+        var primaryButton = new Button
+        {
+            Style = (Style)application.FindResource("PrimaryButtonStyle"),
+            Content = "Скачать и обработать · 109",
+            Width = 262
+        };
+        primaryButton.Measure(new Size(262, 46));
+        primaryButton.Arrange(new Rect(0, 0, 262, 46));
+        primaryButton.ApplyTemplate();
+        var primaryText = FindVisualChild<TextBlock>(primaryButton);
+        if (primaryText?.Foreground is not SolidColorBrush enabledBrush || enabledBrush.Color != Colors.White)
+            errors.Add("BUTTON enabled: label is not rendered white.");
+        primaryButton.Content = "Photoshop · 1/109";
+        primaryButton.UpdateLayout();
+        if (primaryText?.Text != "Photoshop · 1/109" ||
+            primaryText.Foreground is not SolidColorBrush dynamicBrush || dynamicBrush.Color != Colors.White)
+            errors.Add("BUTTON dynamic: updated label is not rendered white.");
+        primaryButton.IsEnabled = false;
+        primaryButton.UpdateLayout();
+        if (primaryText?.Foreground is not SolidColorBrush disabledBrush || disabledBrush.Color != Colors.White)
+            errors.Add("BUTTON disabled: label is not rendered white.");
+    }
+    catch (Exception ex)
+    {
+        errors.Add("BUTTON: " + ex.Message);
+    }
+}

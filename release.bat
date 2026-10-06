@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-set "VERSION=0.1.0"
+set "VERSION=0.1.1"
 set "TAG=v%VERSION%"
 set "REMOTE=https://github.com/divangames/WB_Dropp.git"
 set "MESSAGE=%~1"
