@@ -9,6 +9,7 @@ public sealed class ProductPack : INotifyPropertyChanged
     private double _progress;
     private bool _isComplete;
     private bool _hasError;
+    private bool _isSelected = true;
 
     public ProductPack(string sourcePath) => SourcePath = sourcePath;
 
@@ -57,6 +58,12 @@ public sealed class ProductPack : INotifyPropertyChanged
     {
         get => _hasError;
         set => SetField(ref _hasError, value);
+    }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => SetField(ref _isSelected, value);
     }
 
     public void NotifyScanComplete()

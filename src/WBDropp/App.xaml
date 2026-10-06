@@ -134,5 +134,42 @@
         </Setter.Value>
       </Setter>
     </Style>
+
+    <Style x:Key="CompactCheckBoxStyle" TargetType="CheckBox">
+      <Setter Property="Foreground" Value="#525252"/>
+      <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="CheckBox">
+            <Grid>
+              <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+              <Border x:Name="CheckSurface" Width="18" Height="18" CornerRadius="5" Background="White" BorderBrush="#D6D3D1" BorderThickness="1.2" VerticalAlignment="Center">
+                <Grid>
+                  <Path x:Name="CheckMark" Data="M3.5,8 L7,11.5 14,4.5" Stroke="White" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"/>
+                  <Path x:Name="MixedMark" Data="M4,9 L14,9" Stroke="White" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Visibility="Collapsed"/>
+                </Grid>
+              </Border>
+              <ContentPresenter Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="CheckSurface" Property="Background" Value="{StaticResource AccentBrush}"/>
+                <Setter TargetName="CheckSurface" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="{x:Null}">
+                <Setter TargetName="CheckSurface" Property="Background" Value="{StaticResource AccentBrush}"/>
+                <Setter TargetName="CheckSurface" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                <Setter TargetName="MixedMark" Property="Visibility" Value="Visible"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </Application.Resources>
 </Application>

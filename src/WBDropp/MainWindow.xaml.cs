@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private readonly DropletRunner _dropletRunner = new();
     private readonly SiteCatalogDownloader _siteDownloader = new();
     private readonly ReportService _reportService = new();
+    private readonly UpdateService _updateService = new();
     private readonly CancellationTokenSource _windowCancellation = new();
     private readonly List<ProcessingReportEntry> _reportEntries = [];
     private readonly Dictionary<string, ProcessingReportEntry> _reportsByPackPath = new(StringComparer.OrdinalIgnoreCase);
@@ -31,10 +32,15 @@ public partial class MainWindow : Window
     private bool _isProcessing;
     private bool _sourceModeInitialized;
     private bool _lastSourceWasSite;
+    private bool _suppressSelectionEvents;
+    private bool _isUpdateDownloading;
     private string? _outputPath;
     private string _downloadPath;
     private string? _lastReportPath;
     private string? _activeActionText;
+    private DownloadedAppUpdate? _downloadedUpdate;
+    private DateTime? _sessionStartedAt;
+    private TimeSpan _accumulatedWorkDuration;
 
     public ObservableCollection<ProductPack> Packs { get; } = [];
     private bool IsSiteMode => SiteSourceMode.IsChecked == true;
@@ -48,6 +54,7 @@ public partial class MainWindow : Window
 
         InitializeComponent();
         DataContext = this;
+        Packs.CollectionChanged += Packs_CollectionChanged;
         DownloadPathText.Text = _downloadPath;
         DownloadPathText.ToolTip = _downloadPath;
         _sourceModeInitialized = true;
@@ -57,17 +64,20 @@ public partial class MainWindow : Window
         RefreshControls();
     }
 
-    private void Window_Loaded(object sender, RoutedEventArgs e)
+    private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
-        if (!SystemParameters.ClientAreaAnimation) return;
+        if (SystemParameters.ClientAreaAnimation)
+        {
+            var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+            RootGrid.RenderTransform = new TranslateTransform(0, 8);
+            WindowSurface.Opacity = 0;
+            WindowSurface.BeginAnimation(OpacityProperty,
+                new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease });
+            ((TranslateTransform)RootGrid.RenderTransform).BeginAnimation(TranslateTransform.YProperty,
+                new DoubleAnimation(8, 0, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease });
+        }
 
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        RootGrid.RenderTransform = new TranslateTransform(0, 8);
-        WindowSurface.Opacity = 0;
-        WindowSurface.BeginAnimation(OpacityProperty,
-            new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease });
-        ((TranslateTransform)RootGrid.RenderTransform).BeginAnimation(TranslateTransform.YProperty,
-            new DoubleAnimation(8, 0, TimeSpan.FromMilliseconds(220)) { EasingFunction = ease });
+        await CheckForUpdatesAsync();
     }
 
     private void RefreshPhotoshopStatus()
@@ -93,6 +103,7 @@ public partial class MainWindow : Window
             _reportEntries.Clear();
             _reportsByPackPath.Clear();
             _lastReportPath = null;
+            ResetRunTiming();
             RunNotice.Visibility = Visibility.Collapsed;
             OpenReportButton.Visibility = Visibility.Collapsed;
         }
@@ -101,6 +112,52 @@ public partial class MainWindow : Window
         DropZone.Visibility = IsSiteMode ? Visibility.Collapsed : Visibility.Visible;
         AddFolderButton.Visibility = IsSiteMode ? Visibility.Collapsed : Visibility.Visible;
         SourceTitleText.Text = IsSiteMode ? "Товары с сайта" : "Паки товаров";
+        DownloadOnlyCheckBox.Visibility = IsSiteMode ? Visibility.Visible : Visibility.Collapsed;
+        UpdateDownloadOnlyPresentation();
+        RefreshControls();
+    }
+
+    private void DownloadOnly_Checked(object sender, RoutedEventArgs e)
+    {
+        if (ResultOptionsPanel is null) return;
+        UpdateDownloadOnlyPresentation();
+        RefreshControls();
+    }
+
+    private void UpdateDownloadOnlyPresentation()
+    {
+        if (ResultOptionsPanel is null) return;
+        var downloadOnly = IsSiteMode && DownloadOnlyCheckBox.IsChecked == true;
+        ResultOptionsPanel.Visibility = downloadOnly ? Visibility.Collapsed : Visibility.Visible;
+        OutputFolderPanel.Visibility = downloadOnly
+            ? Visibility.Collapsed
+            : FolderMode.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        RoutingPanel.Visibility = downloadOnly ? Visibility.Collapsed : Visibility.Visible;
+        DownloadOnlyHint.Visibility = downloadOnly ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void Packs_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+            foreach (ProductPack pack in e.OldItems) pack.PropertyChanged -= Pack_PropertyChanged;
+        if (e.NewItems is not null)
+            foreach (ProductPack pack in e.NewItems) pack.PropertyChanged += Pack_PropertyChanged;
+        if (DownloadOnlyCheckBox is not null) UpdateDownloadOnlyPresentation();
+        RefreshControls();
+    }
+
+    private void Pack_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ProductPack.IsSelected) && !_suppressSelectionEvents) RefreshControls();
+    }
+
+    private void SelectAll_Click(object sender, RoutedEventArgs e)
+    {
+        if (_isProcessing || _isScanning) return;
+        var select = SelectAllCheckBox.IsChecked == true;
+        _suppressSelectionEvents = true;
+        foreach (var pack in Packs) pack.IsSelected = select;
+        _suppressSelectionEvents = false;
         RefreshControls();
     }
 
@@ -389,15 +446,19 @@ public partial class MainWindow : Window
         _reportEntries.Clear();
         _reportsByPackPath.Clear();
         _lastReportPath = null;
+        ResetRunTiming();
         RunNotice.Visibility = Visibility.Collapsed;
         OpenReportButton.Visibility = Visibility.Collapsed;
+        OverallProgress.Visibility = Visibility.Collapsed;
+        OverallProgress.Value = 0;
+        UpdateDownloadOnlyPresentation();
         RefreshControls();
     }
 
     private void OutputMode_Checked(object sender, RoutedEventArgs e)
     {
         if (OutputFolderPanel is null) return;
-        OutputFolderPanel.Visibility = FolderMode.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        UpdateDownloadOnlyPresentation();
         RefreshControls();
     }
 
@@ -415,22 +476,26 @@ public partial class MainWindow : Window
     {
         if (_isProcessing || _isScanning) return;
 
-        var articles = IsSiteMode ? ArticleParser.Parse(ArticlesInput.Text) : [];
-        if (IsSiteMode && articles.Count == 0)
+        var isSiteDownloadStage = IsSiteMode && Packs.Count == 0;
+        var articles = isSiteDownloadStage ? ArticleParser.Parse(ArticlesInput.Text) : [];
+        if (isSiteDownloadStage && articles.Count == 0)
         {
             ShowNotice("Введите хотя бы один артикул или импортируйте список.", false);
             return;
         }
 
-        try
+        if (!isSiteDownloadStage)
         {
-            _dropletRunner.ValidateDroplets();
-            if (!IsSiteMode) ValidateOutputSelection();
-        }
-        catch (Exception ex)
-        {
-            ShowNotice(ex.Message, false);
-            return;
+            try
+            {
+                _dropletRunner.ValidateDroplets();
+                ValidateOutputSelection();
+            }
+            catch (Exception ex)
+            {
+                ShowNotice(ex.Message, false);
+                return;
+            }
         }
 
         _isProcessing = true;
@@ -440,17 +505,21 @@ public partial class MainWindow : Window
         OpenReportButton.Visibility = Visibility.Collapsed;
         OverallProgress.Visibility = Visibility.Visible;
         OverallProgress.Value = 0;
-        _activeActionText = IsSiteMode ? "Загружаем каталог…" : "Готовим Photoshop…";
+        _activeActionText = isSiteDownloadStage ? "Загружаем каталог…" : "Готовим Photoshop…";
         RefreshControls();
 
         var completed = 0;
         var failed = 0;
         var cancellationToken = _runCancellation.Token;
         var reportDirectory = GetReportDirectory();
+        _sessionStartedAt ??= DateTime.Now;
+        var operationTimer = Stopwatch.StartNew();
+        var runFinalized = false;
+        var downloadOnly = isSiteDownloadStage && DownloadOnlyCheckBox.IsChecked == true;
 
         try
         {
-            if (IsSiteMode)
+            if (isSiteDownloadStage)
             {
                 Packs.Clear();
                 _reportEntries.Clear();
@@ -463,7 +532,7 @@ public partial class MainWindow : Window
                         : $"Скачиваем · {value.CompletedArticles}/{value.TotalArticles}";
                     OverallProgress.Value = value.TotalArticles == 0
                         ? 0
-                        : value.CompletedArticles * 30.0 / value.TotalArticles;
+                        : value.CompletedArticles * 100.0 / value.TotalArticles;
                     RefreshControls();
                 });
 
@@ -487,14 +556,48 @@ public partial class MainWindow : Window
                     RegisterPackReport(pack, "Сайт OutmaxShop", result, scan.Errors);
                 }
 
-                ValidateOutputSelection();
+                _accumulatedWorkDuration += operationTimer.Elapsed;
+                operationTimer.Restart();
+                OverallProgress.Value = 100;
+
+                if (downloadOnly)
+                {
+                    MarkDownloadOnlyComplete();
+                    var reports = SaveReport(reportDirectory, true, _accumulatedWorkDuration);
+                    _lastReportPath = reports.TextPath;
+                    runFinalized = true;
+                    var skipped = _reportEntries.Count(entry => entry.Status is "Пропущено" or "Ошибка");
+                    ShowNotice(
+                        $"Выгрузка завершена: артикулов {Packs.Count}, фотографий {Packs.Sum(pack => pack.TotalCount)}." +
+                        (skipped > 0 ? $" Пропущено: {skipped}." : string.Empty) +
+                        "\n📝 Отчёт для менеджера готов.",
+                        skipped == 0,
+                        showReport: true);
+                    return;
+                }
+
+                if (Packs.Count == 0)
+                {
+                    var reports = SaveReport(reportDirectory, false, _accumulatedWorkDuration);
+                    _lastReportPath = reports.TextPath;
+                    runFinalized = true;
+                    ShowNotice("Не найдено ни одного пака для обработки. Причины записаны в отчёте.", false, showReport: true);
+                    return;
+                }
+
+                ShowNotice(
+                    $"Скачано паков: {Packs.Count}. Отметьте нужные галочками и запустите кадрирование.",
+                    true);
+                return;
             }
 
-            (completed, failed) = await ProcessPacksAsync(IsSiteMode ? 30 : 0, cancellationToken);
-            var reports = _reportService.Save(_reportEntries, reportDirectory);
-            _lastReportPath = reports.TextPath;
+            (completed, failed) = await ProcessPacksAsync(0, cancellationToken);
+            var workDuration = _accumulatedWorkDuration + operationTimer.Elapsed;
+            var finishedReports = SaveReport(reportDirectory, false, workDuration);
+            _lastReportPath = finishedReports.TextPath;
+            runFinalized = true;
 
-            var issues = _reportEntries.Count(entry => entry.Status != "Готово");
+            var issues = _reportEntries.Count(entry => entry.Status is not "Готово" and not "Скачано");
             var message = failed == 0 && issues == 0
                 ? $"Готово: обработано {completed} фото.\n📝 Отчёт для менеджера сохранён рядом с результатом."
                 : $"Готово: обработано {completed}, позиций с замечаниями: {issues}, ошибок Photoshop: {failed}.\n📝 Причины записаны в отчёте для менеджера.";
@@ -507,8 +610,10 @@ public partial class MainWindow : Window
                 entry.Status = "Остановлено";
                 entry.Reason = AppendReason(entry.Reason, "Обработка остановлена пользователем.");
             }
-            var reports = _reportService.Save(_reportEntries, reportDirectory);
+            var workDuration = _accumulatedWorkDuration + operationTimer.Elapsed;
+            var reports = SaveReport(reportDirectory, downloadOnly, workDuration);
             _lastReportPath = reports.TextPath;
+            runFinalized = true;
             ShowNotice($"Остановлено. Успешно обработано {completed} фото.\n📝 Отчёт сохранён.", false, showReport: true);
         }
         catch (Exception ex)
@@ -525,8 +630,10 @@ public partial class MainWindow : Window
             }
             try
             {
-                var reports = _reportService.Save(_reportEntries, reportDirectory);
+                var workDuration = _accumulatedWorkDuration + operationTimer.Elapsed;
+                var reports = SaveReport(reportDirectory, downloadOnly, workDuration);
                 _lastReportPath = reports.TextPath;
+                runFinalized = true;
             }
             catch (Exception reportException)
             {
@@ -540,19 +647,65 @@ public partial class MainWindow : Window
             _activeActionText = null;
             _runCancellation?.Dispose();
             _runCancellation = null;
+            if (runFinalized) ResetRunTiming();
             RefreshPhotoshopStatus();
             RefreshControls();
         }
     }
 
+    private void MarkDownloadOnlyComplete()
+    {
+        foreach (var pack in Packs)
+        {
+            pack.Status = $"Скачано · {pack.TotalCount} фото";
+            pack.Progress = 100;
+            pack.IsComplete = true;
+            pack.HasError = false;
+            if (!_reportsByPackPath.TryGetValue(pack.SourcePath, out var report)) continue;
+            report.Status = "Скачано";
+            report.ProcessedImages = 0;
+            report.ProcessingErrors = 0;
+            report.Reason = report.DownloadErrors > 0
+                ? $"Не скачалось фотографий: {report.DownloadErrors}."
+                : string.Empty;
+        }
+    }
+
+    private ReportFiles SaveReport(string directory, bool downloadOnly, TimeSpan workDuration) =>
+        _reportService.Save(
+            _reportEntries,
+            directory,
+            new ReportRunSummary(
+                _sessionStartedAt ?? DateTime.Now,
+                DateTime.Now,
+                workDuration,
+                downloadOnly));
+
+    private void ResetRunTiming()
+    {
+        _sessionStartedAt = null;
+        _accumulatedWorkDuration = TimeSpan.Zero;
+    }
+
     private async Task<(int Completed, int Failed)> ProcessPacksAsync(double progressOffset, CancellationToken cancellationToken)
     {
-        var processable = Packs.SelectMany(pack => pack.Photos).Count(photo => photo.Droplet is not null);
+        var selectedPacks = Packs.Where(pack => pack.IsSelected).ToList();
+        foreach (var skippedPack in Packs.Where(pack => !pack.IsSelected))
+        {
+            skippedPack.Status = "Не выбран";
+            if (_reportsByPackPath.TryGetValue(skippedPack.SourcePath, out var skippedReport))
+            {
+                skippedReport.Status = "Не выбрано";
+                skippedReport.Reason = AppendReason(skippedReport.Reason, "Папка снята с обработки пользователем.");
+            }
+        }
+
+        var processable = selectedPacks.SelectMany(pack => pack.Photos).Count(photo => photo.Droplet is not null);
         var progressSpan = 100 - progressOffset;
         var completed = 0;
         var failed = 0;
 
-        foreach (var pack in Packs)
+        foreach (var pack in selectedPacks)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var ready = pack.Photos.Where(photo => photo.Droplet is not null).ToList();
@@ -644,7 +797,7 @@ public partial class MainWindow : Window
             throw new InvalidOperationException("Выберите папку для сохранения.");
 
         var outputRoot = Path.GetFullPath(_outputPath);
-        foreach (var pack in Packs)
+        foreach (var pack in Packs.Where(pack => pack.IsSelected))
         {
             var sourceRoot = Path.GetFullPath(pack.SourcePath);
             var packDestination = Path.Combine(outputRoot, SanitizeDirectoryName(pack.Name));
@@ -723,25 +876,39 @@ public partial class MainWindow : Window
     private void RefreshControls()
     {
         if (StartButton is null) return;
-        var ready = Packs.Sum(pack => pack.ReadyCount);
-        var closeUps = Packs.Sum(pack => pack.CloseUpCount);
-        var unsupported = Packs.Sum(pack => pack.UnsupportedCount);
+        var selectedPacks = Packs.Where(pack => pack.IsSelected).ToList();
+        var selectedReady = selectedPacks.Sum(pack => pack.ReadyCount);
+        var closeUps = selectedPacks.Sum(pack => pack.CloseUpCount);
+        var unsupported = selectedPacks.Sum(pack => pack.UnsupportedCount);
         var articles = IsSiteMode ? ArticleParser.Parse(ArticlesInput.Text).Count : 0;
+        var siteDownloadStage = IsSiteMode && Packs.Count == 0;
+        var downloadOnly = siteDownloadStage && DownloadOnlyCheckBox.IsChecked == true;
+        var completedDownloadOnly = IsSiteMode && Packs.Count > 0 && DownloadOnlyCheckBox.IsChecked == true;
 
         EmptyState.Visibility = Packs.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         ClearButton.IsEnabled = (Packs.Count > 0 || (IsSiteMode && articles > 0)) && !_isProcessing && !_isScanning;
         AddFolderButton.IsEnabled = !_isProcessing && !_isScanning;
-        ArticlesInput.IsEnabled = !_isProcessing;
+        ArticlesInput.IsEnabled = !_isProcessing && Packs.Count == 0;
+        DownloadOnlyCheckBox.IsEnabled = !_isProcessing && Packs.Count == 0;
         SitePanel.IsEnabled = !_isProcessing;
         FoldersSourceMode.IsEnabled = !_isProcessing && !_isScanning;
         SiteSourceMode.IsEnabled = !_isProcessing && !_isScanning;
         ReplaceMode.IsEnabled = !_isProcessing;
         FolderMode.IsEnabled = !_isProcessing;
         OutputFolderPanel.IsEnabled = !_isProcessing;
+        PackList.IsEnabled = !_isProcessing && !_isScanning && !completedDownloadOnly;
+        SelectAllCheckBox.Visibility = Packs.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        SelectAllCheckBox.IsEnabled = !_isProcessing && !_isScanning && !completedDownloadOnly;
+        _suppressSelectionEvents = true;
+        SelectAllCheckBox.IsChecked = Packs.Count > 0 && selectedPacks.Count == Packs.Count;
+        SelectAllCheckBox.Content = $"Все паки · {selectedPacks.Count}/{Packs.Count}";
+        _suppressSelectionEvents = false;
+        UpdateButton.IsEnabled = _downloadedUpdate is not null && !_isProcessing && !_isScanning && !_isUpdateDownloading;
 
-        var hasSource = IsSiteMode ? articles > 0 : ready > 0;
+        var hasSource = completedDownloadOnly ? false : siteDownloadStage ? articles > 0 : selectedReady > 0;
+        var outputReady = siteDownloadStage || FolderMode.IsChecked != true || !string.IsNullOrWhiteSpace(_outputPath);
         StartButton.IsEnabled = hasSource && !_isScanning && !_isProcessing &&
-                                (FolderMode.IsChecked != true || !string.IsNullOrWhiteSpace(_outputPath));
+                                outputReady;
         CancelButton.Visibility = _isProcessing ? Visibility.Visible : Visibility.Collapsed;
         CancelButton.IsEnabled = _isProcessing;
         if (_isProcessing) CancelButton.Content = "Остановить после текущего фото";
@@ -750,19 +917,82 @@ public partial class MainWindow : Window
             ? _activeActionText ?? "Выполняется…"
             : _isScanning
                 ? "Анализируем фотографии…"
-                : IsSiteMode
-                    ? articles > 0 ? $"Скачать и обработать · {articles}" : "Введите артикулы"
-                    : ready > 0 ? $"Обработать {ready} фото" : "Добавьте папки";
+                : siteDownloadStage
+                    ? articles > 0
+                        ? downloadOnly ? $"Выгрузить · {articles}" : $"Скачать паки · {articles}"
+                        : "Введите артикулы"
+                    : completedDownloadOnly
+                        ? "Выгрузка завершена"
+                        : selectedReady > 0 ? $"Обработать {selectedReady} фото" : "Выберите паки";
 
         SummaryText.Text = IsSiteMode
             ? Packs.Count == 0
                 ? articles == 0 ? "Введите или импортируйте артикулы" : $"Артикулов в очереди: {articles}"
-                : $"Паков: {Packs.Count}   •   к обработке: {ready}   •   крупняк: {closeUps}" +
+                : $"Выбрано: {selectedPacks.Count}/{Packs.Count}   •   к обработке: {selectedReady}   •   крупняк: {closeUps}" +
                   (unsupported > 0 ? $"   •   пропуск: {unsupported}" : string.Empty)
             : Packs.Count == 0
                 ? "Добавьте папки с фотографиями"
-                : $"Паков: {Packs.Count}   •   к обработке: {ready}   •   крупняк: {closeUps}" +
+                : $"Выбрано: {selectedPacks.Count}/{Packs.Count}   •   к обработке: {selectedReady}   •   крупняк: {closeUps}" +
                   (unsupported > 0 ? $"   •   пропуск: {unsupported}" : string.Empty);
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        try
+        {
+            var update = await _updateService.CheckAsync(_windowCancellation.Token);
+            if (update is null) return;
+
+            _isUpdateDownloading = true;
+            UpdateButton.Visibility = Visibility.Visible;
+            UpdateButton.IsEnabled = false;
+            UpdateButton.Content = $"Скачиваем v{update.Version.ToString(3)} · 0%";
+
+            var progress = new Progress<int>(percent =>
+            {
+                UpdateButton.Content = $"Скачиваем v{update.Version.ToString(3)} · {percent}%";
+            });
+            _downloadedUpdate = await _updateService.DownloadAsync(update, progress, _windowCancellation.Token);
+            UpdateButton.Content = $"Установить v{update.Version.ToString(3)}";
+            UpdateButton.ToolTip = "Обновление уже скачано и готово к установке";
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            UpdateButton.Visibility = Visibility.Collapsed;
+            AppLogger.Error("Не удалось проверить или скачать обновление", ex);
+        }
+        finally
+        {
+            _isUpdateDownloading = false;
+            RefreshControls();
+        }
+    }
+
+    private void UpdateButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_downloadedUpdate is null || _isProcessing || _isScanning) return;
+        var version = _downloadedUpdate.Release.Version.ToString(3);
+        var answer = MessageBox.Show(this,
+            $"Обновление {version} уже скачано. Установить его сейчас?\n\nWB Dropp закроется, заменит файлы и запустится снова.",
+            "Обновление WB Dropp",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Information);
+        if (answer != MessageBoxResult.Yes) return;
+
+        try
+        {
+            _updateService.InstallAndRestart(_downloadedUpdate);
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Error("Не удалось запустить установку обновления", ex);
+            ShowNotice($"Не удалось установить обновление: {ex.Message}", false);
+        }
     }
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

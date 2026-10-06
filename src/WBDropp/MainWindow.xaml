@@ -52,24 +52,27 @@
       <Border Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="13" Padding="16" Margin="0,0,0,9">
         <Grid>
           <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="29"/>
             <ColumnDefinition Width="42"/>
             <ColumnDefinition Width="*"/>
             <ColumnDefinition Width="190"/>
             <ColumnDefinition Width="38"/>
           </Grid.ColumnDefinitions>
 
-          <Border Width="34" Height="34" CornerRadius="9" Background="{StaticResource AccentSoftBrush}" VerticalAlignment="Top">
+          <CheckBox Grid.Column="0" Style="{StaticResource CompactCheckBoxStyle}" IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Top" Margin="0,7,0,0" ToolTip="Включить пак в обработку"/>
+
+          <Border Grid.Column="1" Width="34" Height="34" CornerRadius="9" Background="{StaticResource AccentSoftBrush}" VerticalAlignment="Top">
             <Path Data="M3,5 L9,5 11,7 21,7 21,18 C21,19.1 20.1,20 19,20 L3,20 C1.9,20 1,19.1 1,18 L1,7 C1,5.9 1.9,5 3,5 Z"
                   Stroke="{StaticResource AccentBrush}" StrokeThickness="1.6" Fill="Transparent" Width="21" Height="20" Stretch="Uniform"/>
           </Border>
 
-          <StackPanel Grid.Column="1" Margin="8,0,18,0">
+          <StackPanel Grid.Column="2" Margin="8,0,18,0">
             <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis"/>
             <TextBlock Text="{Binding SourcePath}" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,3,0,0" TextTrimming="CharacterEllipsis"/>
             <TextBlock Text="{Binding Summary}" Foreground="#525252" FontSize="11" Margin="0,9,0,0"/>
           </StackPanel>
 
-          <StackPanel Grid.Column="2" VerticalAlignment="Center">
+          <StackPanel Grid.Column="3" VerticalAlignment="Center">
             <DockPanel LastChildFill="True" Margin="0,0,0,7">
               <Ellipse Width="6" Height="6" Fill="#A3A3A3" Margin="0,0,7,0" VerticalAlignment="Center">
                 <Ellipse.Style>
@@ -87,7 +90,7 @@
             <ProgressBar Minimum="0" Maximum="100" Value="{Binding Progress}"/>
           </StackPanel>
 
-          <Button Grid.Column="3" Style="{StaticResource IconButtonStyle}" Tag="{Binding}" Click="RemovePack_Click" ToolTip="Убрать пак">
+          <Button Grid.Column="4" Style="{StaticResource IconButtonStyle}" Tag="{Binding}" Click="RemovePack_Click" ToolTip="Убрать пак">
             <Path Data="M4,4 L12,12 M12,4 L4,12" Stroke="#A3A3A3" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="12" Height="12"/>
           </Button>
         </Grid>
@@ -117,16 +120,19 @@
             </Border>
             <TextBlock Text="WB Dropp" FontWeight="SemiBold" FontSize="14" Margin="10,0,0,0" VerticalAlignment="Center"/>
             <Border Background="#EEEDEB" CornerRadius="5" Padding="6,2" Margin="8,0,0,0">
-              <TextBlock Text="0.1.1" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
+              <TextBlock Text="0.2.0" FontSize="10" Foreground="{StaticResource MutedBrush}"/>
             </Border>
           </StackPanel>
 
-          <Border Grid.Column="1" Background="#F0EFED" CornerRadius="14" Padding="10,5" VerticalAlignment="Center" Margin="0,0,8,0">
-            <StackPanel Orientation="Horizontal">
-              <Ellipse x:Name="PhotoshopDot" Width="6" Height="6" Fill="#A3A3A3" VerticalAlignment="Center" Margin="0,0,7,0"/>
-              <TextBlock x:Name="PhotoshopStatusText" Text="Photoshop" FontSize="11" Foreground="#525252"/>
-            </StackPanel>
-          </Border>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Button x:Name="UpdateButton" Style="{StaticResource SecondaryButtonStyle}" Height="30" Padding="11,0" FontSize="11" Margin="0,0,8,0" Visibility="Collapsed" Click="UpdateButton_Click"/>
+            <Border Background="#F0EFED" CornerRadius="14" Padding="10,5">
+              <StackPanel Orientation="Horizontal">
+                <Ellipse x:Name="PhotoshopDot" Width="6" Height="6" Fill="#A3A3A3" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                <TextBlock x:Name="PhotoshopStatusText" Text="Photoshop" FontSize="11" Foreground="#525252"/>
+              </StackPanel>
+            </Border>
+          </StackPanel>
 
           <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" shell:WindowChrome.IsHitTestVisibleInChrome="True">
             <Button Style="{StaticResource IconButtonStyle}" Click="Minimize_Click" Content="—" FontSize="13"/>
@@ -163,6 +169,7 @@
               <TextBlock x:Name="SummaryText" Text="Добавьте папки с фотографиями" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,5,0,0"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+              <CheckBox x:Name="SelectAllCheckBox" Style="{StaticResource CompactCheckBoxStyle}" Content="Все паки" Margin="0,0,14,0" VerticalAlignment="Center" Visibility="Collapsed" Click="SelectAll_Click"/>
               <Button x:Name="ClearButton" Style="{StaticResource SecondaryButtonStyle}" Content="Очистить" Height="36" Margin="0,0,8,0" Click="Clear_Click" IsEnabled="False"/>
               <Button x:Name="AddFolderButton" Style="{StaticResource SecondaryButtonStyle}" Content="+ Добавить папку" Height="36" Click="AddFolder_Click"/>
             </StackPanel>
@@ -184,7 +191,7 @@
 
           <Border x:Name="SitePanel" Grid.Row="2" Background="#FBFBFA" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="14" Padding="15" Margin="0,0,0,16" Visibility="Collapsed">
             <Grid>
-              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
               <DockPanel Margin="0,0,0,11">
                 <TextBlock Text="Загрузка из каталога OutmaxShop" FontWeight="SemiBold" FontSize="13"/>
                 <TextBlock Text="YML-каталог" Foreground="#A3A3A3" FontSize="10" HorizontalAlignment="Right"/>
@@ -209,9 +216,10 @@
                       <TextBlock x:Name="DownloadPathText" Text="Не выбрана" FontSize="10" Foreground="#525252" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,6,0"/>
                     </DockPanel>
                   </Border>
-                  <TextBlock Text="Фото скачиваются в паки по артикулам, затем сразу обрабатываются Photoshop." FontSize="10" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" LineHeight="14" Margin="0,9,0,0"/>
+                  <TextBlock Text="Сначала скачайте паки, затем отметьте нужные для Photoshop." FontSize="10" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" LineHeight="14" Margin="0,9,0,0"/>
                 </StackPanel>
               </Grid>
+              <CheckBox x:Name="DownloadOnlyCheckBox" Grid.Row="2" Style="{StaticResource CompactCheckBoxStyle}" Content="Выгрузить без кадрирования" Margin="0,13,0,0" Checked="DownloadOnly_Checked" Unchecked="DownloadOnly_Checked"/>
             </Grid>
           </Border>
 
@@ -239,7 +247,7 @@
               <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0">
+            <StackPanel x:Name="ResultOptionsPanel" Grid.Row="0">
               <TextBlock Text="Результат" FontSize="16" FontWeight="SemiBold"/>
               <TextBlock Text="Куда сохранить обработанные фото" Foreground="{StaticResource MutedBrush}" FontSize="11" Margin="0,4,0,0"/>
               <Border Background="#F0EFED" CornerRadius="10" Padding="3" Margin="0,15,0,0">
@@ -262,7 +270,7 @@
               </DockPanel>
             </Border>
 
-            <StackPanel Grid.Row="2" Margin="0,20,0,0">
+            <StackPanel x:Name="RoutingPanel" Grid.Row="2" Margin="0,20,0,0">
               <TextBlock Text="Автомаршрутизация" FontSize="12" FontWeight="SemiBold"/>
               <Grid Margin="0,12,0,0">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -284,6 +292,13 @@
                 <TextBlock Text="Крупный кадр определяется по заполнению кадра и касанию нескольких границ." TextWrapping="Wrap" FontSize="10" Foreground="#9A3412" LineHeight="15"/>
               </Border>
             </StackPanel>
+
+            <Border x:Name="DownloadOnlyHint" Grid.Row="2" Background="#F0FDF4" CornerRadius="10" Padding="12" Margin="0,20,0,0" Visibility="Collapsed" VerticalAlignment="Top">
+              <StackPanel>
+                <TextBlock Text="Только выгрузка" FontSize="12" FontWeight="SemiBold" Foreground="#166534"/>
+                <TextBlock Text="Фотографии сохранятся по артикулам без запуска Photoshop и изменения файлов." FontSize="10" Foreground="#166534" TextWrapping="Wrap" LineHeight="15" Margin="0,5,0,0"/>
+              </StackPanel>
+            </Border>
 
             <Border x:Name="RunNotice" Grid.Row="3" VerticalAlignment="Bottom" Background="#F0FDF4" CornerRadius="10" Padding="11" Margin="0,15,0,12" Visibility="Collapsed">
               <StackPanel>

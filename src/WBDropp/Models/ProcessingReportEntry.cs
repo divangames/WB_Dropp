@@ -22,3 +22,9 @@ public sealed class ProcessingReportEntry
 }
 
 public sealed record ReportFiles(string TextPath);
+
+public sealed record ReportRunSummary(
+    DateTime StartedAt,
+    DateTime FinishedAt,
+    TimeSpan WorkDuration,
+    bool DownloadOnly = false);
