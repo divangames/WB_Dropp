@@ -4,8 +4,8 @@ cd /d "%~dp0"
 
 call build.bat || exit /b 1
 
-set "PUBLISH_DIR=%~dp0dist\win-x64"
-set "ARCHIVE=%~dp0dist\WBDropp-v0.0.1-win-x64.zip"
+set "PUBLISH_DIR=%~dp0dist\win-x64-v0.0.2"
+set "ARCHIVE=%~dp0dist\WBDropp-v0.0.2-win-x64.zip"
 
 if exist "%PUBLISH_DIR%" rmdir /s /q "%PUBLISH_DIR%"
 if exist "%ARCHIVE%" del /q "%ARCHIVE%"

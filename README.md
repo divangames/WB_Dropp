@@ -34,7 +34,7 @@ Photoshop можно не запускать заранее: первый drople
 - `run.bat` — запуск из исходников.
 - `build.bat` — проверка и Release-сборка.
 - `publish.bat` — self-contained публикация и ZIP в `dist`.
-- `release.bat "текст коммита"` — сборка, commit, push и GitHub Release `v0.0.1`.
+- `release.bat "текст коммита"` — сборка, commit, push и GitHub Release текущей версии.
 
 ## Структура релиза
 

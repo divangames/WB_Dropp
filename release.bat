@@ -2,7 +2,7 @@
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-set "VERSION=0.0.1"
+set "VERSION=0.0.2"
 set "TAG=v%VERSION%"
 set "REMOTE=https://github.com/divangames/WB_Dropp.git"
 set "MESSAGE=%~1"
@@ -38,7 +38,7 @@ if errorlevel 1 (
   )
 )
 
-git add -A || exit /b 1
+git add -A -- .gitattributes .gitignore CHANGELOG.md LICENSE README.md WBDropp.sln build.bat publish.bat release.bat run.bat droplers src tests || exit /b 1
 git diff --cached --quiet
 if errorlevel 1 git commit -m "%MESSAGE%" || exit /b 1
 

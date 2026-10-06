@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 where dotnet >nul 2>nul || (
@@ -16,7 +16,13 @@ dotnet build "WBDropp.sln" --configuration Release --no-restore || goto :failed
 
 if exist "Tets" (
   echo [3/4] Checking photo routing...
-  dotnet run --project "tests\WBDropp.SmokeTests\WBDropp.SmokeTests.csproj" --configuration Release --no-build -- "Tets" || goto :failed
+  set "CLOSEUP_DIR="
+  if exist "promts" for /d %%D in ("promts\*") do if not defined CLOSEUP_DIR set "CLOSEUP_DIR=%%~fD"
+  if defined CLOSEUP_DIR (
+    dotnet run --project "tests\WBDropp.SmokeTests\WBDropp.SmokeTests.csproj" --configuration Release --no-build -- "Tets" "!CLOSEUP_DIR!" || goto :failed
+  ) else (
+    dotnet run --project "tests\WBDropp.SmokeTests\WBDropp.SmokeTests.csproj" --configuration Release --no-build -- "Tets" || goto :failed
+  )
 ) else (
   echo [3/4] Sample set is not present - routing smoke test skipped.
 )

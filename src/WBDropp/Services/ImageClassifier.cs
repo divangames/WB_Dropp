@@ -42,21 +42,29 @@ public sealed class ImageClassifier
         var pixels = new byte[stride * SampleHeight];
         converted.CopyPixels(pixels, stride, 0);
 
-        var borderR = new List<byte>();
-        var borderG = new List<byte>();
-        var borderB = new List<byte>();
+        var borderPixels = new List<(byte R, byte G, byte B, int Brightness)>();
 
         for (var y = 0; y < SampleHeight; y++)
             for (var x = 0; x < SampleWidth; x++)
             {
                 if (x >= 6 && x < SampleWidth - 6 && y >= 6 && y < SampleHeight - 6) continue;
                 var offset = y * stride + x * 4;
-                borderB.Add(pixels[offset]);
-                borderG.Add(pixels[offset + 1]);
-                borderR.Add(pixels[offset + 2]);
+                var b = pixels[offset];
+                var g = pixels[offset + 1];
+                var r = pixels[offset + 2];
+                borderPixels.Add((r, g, b, r + g + b));
             }
 
-        borderR.Sort(); borderG.Sort(); borderB.Sort();
+        // The product can cover most of the border in a close-up. Using the
+        // median of every border pixel would then mistake a dark shoe for the
+        // background. Studio backgrounds are the lightest border region, so
+        // estimate their colour from the brightest 20% of border pixels.
+        borderPixels.Sort((left, right) => left.Brightness.CompareTo(right.Brightness));
+        var brightestStart = (int)(borderPixels.Count * 0.80);
+        var borderR = borderPixels.Skip(brightestStart).Select(pixel => pixel.R).Order().ToList();
+        var borderG = borderPixels.Skip(brightestStart).Select(pixel => pixel.G).Order().ToList();
+        var borderB = borderPixels.Skip(brightestStart).Select(pixel => pixel.B).Order().ToList();
+
         var bgR = borderR[borderR.Count / 2];
         var bgG = borderG[borderG.Count / 2];
         var bgB = borderB[borderB.Count / 2];
